@@ -546,6 +546,30 @@ main{max-width:1280px;margin:0 auto;padding:0 20px 96px}
 .admin-login-box h2{font-size:22px;margin-bottom:6px}
 .admin-login-box p{color:var(--text-muted);font-size:13px;margin-bottom:24px}
 
+/* ── MESSAGE CONTEXT MENU ── */
+.msg-menu {
+  position: fixed;
+  z-index: 10000;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--rs);
+  box-shadow: var(--shadow-lg);
+  display: none;
+  min-width: 150px;
+  overflow: hidden;
+}
+.msg-menu div {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--t);
+  color: var(--text);
+}
+.msg-menu div:hover {
+  background: var(--surface2);
+}
+
 /* ── HELP BOX ── */
 .help-box{background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;border-radius:var(--r);padding:18px;display:flex;align-items:center;gap:14px}
 .help-icon{font-size:32px;flex-shrink:0}
@@ -1506,6 +1530,26 @@ function compressImage(file, maxWidth = 1000, quality = 0.6) {
 }
 
 /* ═══════════════════════════════════════════
+   AUDIO NOTIFICATIONS
+═══════════════════════════════════════════ */
+const AUDIO = {
+  // Using reliable public CDNs for short UI sounds
+  msgSent: new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3'),
+  msgIn:   new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3'),
+  notif:   new Audio('https://assets.mixkit.co/active_storage/sfx/2357/2358-preview.mp3') 
+};
+
+function playSound(type) {
+  try {
+    const sound = AUDIO[type];
+    if (sound) {
+      sound.currentTime = 0;
+      sound.play().catch(e => console.warn('Audio play blocked by browser. User must interact with page first.'));
+    }
+  } catch(e) {}
+}
+
+/* ═══════════════════════════════════════════
    PWA
 ═══════════════════════════════════════════ */
 (function setupPWA() {
@@ -2178,24 +2222,36 @@ function _subscribeMessages(convId) {
       const time = m.ts ? new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : (m.time || '');
       const senderLabel = (!isMe && m.from !== 'system' && m.senderName) ? `<div style="font-size:10px;font-weight:700;color:var(--brand);margin-bottom:3px">${m.senderName}</div>` : '';
       
-      // Sent/Read indicators
+      // Sent/Delivered/Read indicators
       let statusIcon = '';
       if (isMe && m.from !== 'system') {
-        if (m.read) statusIcon = '<span style="color:var(--brand);margin-left:4px;font-size:12px;font-weight:700">✓✓</span>';
-        else statusIcon = '<span style="color:var(--text-light);margin-left:4px;font-size:12px">✓</span>';
+        if (m.read) statusIcon = '<span style="color:#25D366;margin-left:4px;font-size:12px;font-weight:700">✓✓</span>';
+        else if (m.delivered) statusIcon = '<span style="color:var(--text-muted);margin-left:4px;font-size:12px;font-weight:700">✓✓</span>';
+        else statusIcon = '<span style="color:var(--text-muted);margin-left:4px;font-size:12px">✓</span>';
       }
 
-      return `<div class="msg ${cls}">${senderLabel}${m.text}<div class="msg-time">${time}${statusIcon}</div></div>`;
+      const msgHtml = `<div class="msg ${cls}" oncontextmenu="event.preventDefault(); showMsgMenu(event, '${convId}', '${m.key}', ${isMe})">
+        ${senderLabel}${m.text}
+        <div class="msg-time">${time}${statusIcon}</div>
+      </div>`;
+      
+      return (m.deletedEveryone || (m.deletedFor && m.deletedFor[user.uid])) ? '' : msgHtml;
     }).join('');
 
     if (wasAtBottom) container.scrollTop = container.scrollHeight;
 
-    // Mark messages from others as READ if we are currently viewing the conversation
-    if (currentPage === 'messages' && currentConvId === convId) {
+    // Mark messages from others as DELIVERED and READ
+    if (_fbReady()) {
       const { db, ref, update } = window._fb;
       msgs.forEach(m => {
-        if (m.senderUID !== user.uid && !m.read && m.from !== 'system') {
-          update(ref(db, `messages/${convId}/${m.key}`), { read: true });
+        if (m.senderUID !== user.uid && m.from !== 'system') {
+          const updates = {};
+          if (!m.delivered) updates.delivered = true;
+          if (!m.read && currentPage === 'messages' && currentConvId === convId) updates.read = true;
+          
+          if (Object.keys(updates).length > 0) {
+            update(ref(db, `messages/${convId}/${m.key}`), updates);
+          }
         }
       });
     }
@@ -2205,7 +2261,15 @@ function _subscribeMessages(convId) {
     if (statusEl) statusEl.textContent = '● Live';
 
     // Unread badge — count messages from others not seen
-    if (conv) { conv.unread = 0; updateMsgBadge(); }
+    if (conv) { 
+      // Play sound if new incoming message from others
+      const lastMsg = msgs[msgs.length - 1];
+      if (lastMsg && lastMsg.senderUID !== user.uid && !lastMsg.read && lastMsg.from !== 'system') {
+        playSound('msgIn');
+      }
+      conv.unread = 0; 
+      updateMsgBadge(); 
+    }
   });
 }
 
@@ -2256,8 +2320,12 @@ function sendMsg(convId) {
     senderUID:  user.uid,
     senderName: user.name,
     ts:         serverTimestamp(),
-    read:       false
+    read:       false,
+    delivered:  false
   });
+  
+  // Play message sent sound
+  playSound('msgSent');
 
   // Update conversation last message
   update(ref(db, 'conversations/' + convId), {
@@ -2279,6 +2347,51 @@ function sendMsg(convId) {
 
   if (conv) addNotif({icon:'💬', text:`Message sent to ${conv.sellerName} about "${conv.productName}"`, time:nowTime(), unread:false});
   saveSession();
+}
+
+// ── Delete Message ────────────────────────────────────
+function showMsgMenu(e, convId, msgKey, isMe) {
+  const menu = document.getElementById('msgMenu');
+  menu.style.display = 'block';
+  menu.style.left = Math.min(e.pageX, window.innerWidth - 150) + 'px';
+  menu.style.top = e.pageY + 'px';
+  
+  menu.innerHTML = `
+    <div onclick="deleteMsg('${convId}', '${msgKey}', false)">Delete for me</div>
+    ${isMe ? `<div onclick="deleteMsg('${convId}', '${msgKey}', true)" style="color:var(--danger)">Delete for everyone</div>` : ''}
+    <div onclick="closeMsgMenu()" style="border-top:1px solid var(--border)">Cancel</div>
+  `;
+  
+  // Close menu when clicking outside
+  const closer = () => { menu.style.display = 'none'; document.removeEventListener('click', closer); };
+  setTimeout(() => document.addEventListener('click', closer), 10);
+}
+
+function closeMsgMenu() {
+  document.getElementById('msgMenu').style.display = 'none';
+}
+
+async function deleteMsg(convId, msgKey, forEveryone) {
+  closeMsgMenu();
+  if (!_fbReady()) return;
+  const { db, ref, update, set } = window._fb;
+  
+  try {
+    if (forEveryone) {
+      // Mark as deleted for everyone (cannot fully delete as it breaks Firebase listeners sometimes)
+      await update(ref(db, `messages/${convId}/${msgKey}`), { 
+        text: '🚫 This message was deleted', 
+        deletedEveryone: true 
+      });
+    } else {
+      // Delete for me only
+      await update(ref(db, `messages/${convId}/${msgKey}/deletedFor`), { [user.uid]: true });
+    }
+    toast('Message deleted');
+  } catch(e) {
+    console.error('Delete message error:', e);
+    toast('Error deleting message', 'warn');
+  }
 }
 
 function chatWAByConv(convId) {
@@ -2354,7 +2467,19 @@ function copyShareLink() {
 
 function updateMsgBadge() {
   const unread = Object.values(conversations).reduce((s,c)=>s+c.unread,0);
-  ['msgBadge','bnMsgBadge'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.textContent=unread;el.classList.toggle('hidden',unread===0);});
+  ['msgBadge','bnMsgBadge'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.textContent=unread;
+    el.classList.toggle('hidden',unread===0);
+  });
+  
+  // Also update the chat icon in the bottom navigation
+  const chatIconBadge = document.getElementById('bnMsgBadge');
+  if (chatIconBadge) {
+    chatIconBadge.textContent = unread;
+    chatIconBadge.classList.toggle('hidden', unread === 0);
+  }
 }
 
 function chatWA(productId) {
@@ -2404,7 +2529,10 @@ function listenForGlobalNotifs() {
         if (!exists) {
           notifications.unshift(n);
           // Show toast for new unread notification
-          if (n.unread) toast(n.icon + ' ' + n.text, 'ok');
+          if (n.unread) {
+            toast(n.icon + ' ' + n.text, 'ok');
+            playSound('notif');
+          }
         }
       });
       
@@ -3637,6 +3765,7 @@ function checkPendingAdverts() {
           localAd._pending = false;
           saveSession();
           addNotif({icon:'🎉',text:`Your advert "${p.name}" is now live!`,time:nowFull(),unread:true});
+          playSound('notif'); // Play sound for live advert notification
           if (currentPage === 'profile') renderProfile();
           if (currentPage === 'dashboard') renderDashboard();
         }
@@ -4289,5 +4418,7 @@ try {
 })();
 
 </script>
+<div id="msgMenu" class="msg-menu"></div>
+
 </body>
 </html>
