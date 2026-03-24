@@ -3477,7 +3477,15 @@ async function submitListing(){
 
   } catch(e) {
     console.error('submitListing error:', e);
-    toast('Error posting advert. Check your internet.', 'warn');
+    if (!navigator.onLine) {
+      toast('You are offline. Please connect to the internet to post.', 'warn');
+    } else if (e.message && e.message.includes('permission_denied')) {
+      toast('Server Access Denied. Check Firebase rules for "products".', 'warn');
+    } else if (e.message && e.message.includes('Quota exceeded')) {
+      toast('Firebase Quota Exceeded. Database is full or busy.', 'warn');
+    } else {
+      toast('Error posting advert: ' + (e.message || 'Unknown Error'), 'warn');
+    }
   } finally {
     btn.textContent = origTxt;
     btn.disabled = false;
@@ -3955,12 +3963,20 @@ async function changePassword() {
    INIT
 ═══════════════════════════════════════════ */
 try {
-  history.replaceState({page: 'home'}, null, '#home');
+  // Respect current hash or default to home
+  const initialPage = window.location.hash.replace('#', '') || 'home';
+  history.replaceState({page: initialPage}, null, window.location.hash || '#home');
+  
   populateSelects();
   renderBillboard();
   renderStatesGrid();
   renderProducts();
-  loadSession();
+  loadSession(); // loadSession calls applyLogin, which updates UI
+  
+  // If we're not on home, show the requested page
+  if (initialPage !== 'home') {
+    showPage(initialPage);
+  }
 } catch(e) {
   console.error('INIT error:', e);
 }
