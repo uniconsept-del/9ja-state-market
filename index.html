@@ -737,8 +737,8 @@ document.dispatchEvent(new Event('fb-ready'));
 
 // Auto-refresh messages page if user is already on it when Firebase connects
 document.addEventListener('fb-ready', () => {
-  if (typeof pageHistory !== 'undefined') {
-    const cur = pageHistory[pageHistory.length - 1];
+  if (typeof currentPage !== 'undefined') {
+    const cur = currentPage;
     if (cur === 'messages' && typeof renderMessages === 'function') renderMessages();
   }
 });
@@ -851,7 +851,7 @@ document.addEventListener('fb-ready', () => {
 
     <div class="mob-search">
       <span class="search-icon" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-light)"><svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
-      <input type="text" placeholder="Search products, states…" oninput="filterProducts(this.value)">
+      <input type="text" placeholder="Search products, states…" oninput="filterProducts(this.value)" onkeydown="checkAdminCode(this,event)">
     </div>
 
     <!-- States -->
@@ -914,7 +914,7 @@ document.addEventListener('fb-ready', () => {
       <div id="loginForm">
         <div class="fg"><label class="fl">Email</label><input class="fi" type="email" id="loginEmail" placeholder="hello@example.com"></div>
         <div class="fg"><label class="fl">Password</label><input class="fi" type="password" id="loginPass" placeholder="••••••••"><div class="fe hidden" id="loginErr">Invalid email or password</div></div>
-        <button class="btn-sub" onclick="doLogin()">Sign In</button>
+        <button class="btn-sub" id="loginBtn" onclick="doLogin()">Sign In</button>
       </div>
       <div id="signupForm" style="display:none">
         <div class="frow">
@@ -924,7 +924,7 @@ document.addEventListener('fb-ready', () => {
         <div class="fg"><label class="fl">Email</label><input class="fi" type="email" id="signupEmail" placeholder="hello@example.com"><div class="fe hidden" id="signupEmailErr">Enter a valid email</div></div>
         <div class="fg"><label class="fl">Password</label><input class="fi" type="password" id="signupPass" placeholder="Min. 8 characters"><div class="fe hidden" id="signupPassErr">Min. 8 characters</div></div>
         <div class="fg"><label class="fl">State</label><select class="fsel" id="signupState"><option value="">Select your state</option></select></div>
-        <button class="btn-sub" onclick="doSignup()">Create Account</button>
+        <button class="btn-sub" id="signupBtn" onclick="doSignup()">Create Account</button>
       </div>
     </div>
   </div>
@@ -1415,7 +1415,7 @@ let currentConvId = null;
 let sellerListings = [];
 let pendingListings = [];
 let likedProducts = new Set();
-let pageHistory = ['home'];
+let currentPage = 'home';
 let currentCat = 'all';
 let currentSearch = '';
 let currentStateFilter = '';
@@ -1424,6 +1424,30 @@ let currentEditId = null;
 let selectedReportCat = '';
 let deferredInstall = null;
 let detailQty = 1;
+
+/* ═══════════════════════════════════════════
+   IMAGE COMPRESSION
+═══════════════════════════════════════════ */
+function compressImage(file, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = event.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 /* ═══════════════════════════════════════════
    PWA
@@ -1460,7 +1484,7 @@ document.addEventListener('touchend', () => {
   setTimeout(() => {
     document.getElementById('ptr').classList.remove('on');
     // Refresh current active page
-    const activePage = pageHistory[pageHistory.length - 1] || 'home';
+    const activePage = currentPage || 'home';
     if (activePage === 'home') { renderProducts(); renderStatesGrid(); }
     else if (activePage === 'dashboard') renderDashboard();
     else if (activePage === 'messages') renderMessages();
@@ -1523,28 +1547,65 @@ function loadSession() {
 /* ═══════════════════════════════════════════
    PAGE ROUTING
 ═══════════════════════════════════════════ */
+window.addEventListener('popstate', e => {
+  if (e.state && e.state.page) {
+    _goPage(e.state.page, false);
+  } else {
+    _goPage('home', false);
+  }
+});
+
 function showPage(name) {
-  const cur = pageHistory[pageHistory.length-1];
-  if (cur !== name) pageHistory.push(name);
+  if (currentPage !== name) {
+    history.pushState({page: name}, null, `#${name}`);
+  }
   _goPage(name);
   saveSession();
 }
 function goBack() {
-  if (pageHistory.length > 1) { pageHistory.pop(); _goPage(pageHistory[pageHistory.length-1]); }
-  else _goPage('home');
+  if (window.history.length > 1) {
+    history.back();
+  } else {
+    showPage('home');
+  }
 }
-function _goPage(name) {
+function _goPage(name, addToHistory = false) {
+  if (addToHistory) {
+    history.pushState({page: name}, null, `#${name}`);
+  }
+  currentPage = name;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const el = document.getElementById('page-'+name);
   if (el) el.classList.add('active');
   window.scrollTo(0,0);
+  
+  // Set bottom nav active state
+  document.querySelectorAll('.bn').forEach(b => b.classList.remove('active'));
+  let bnId = 'bn-home';
+  if (['home', 'detail'].includes(name)) bnId = 'bn-home';
+  else if (name === 'messages') bnId = 'bn-msgs';
+  else if (name === 'profile') bnId = 'bn-profile';
+  else if (name === 'newlisting') bnId = 'bn-post';
+  const bn = document.getElementById(bnId);
+  if (bn) bn.classList.add('active');
+
   if (name === 'dashboard') renderDashboard();
   if (name === 'checkout') renderCheckout();
-  if (name === 'profile') renderProfile();
+  if (name === 'profile') renderProfileProfileSection();
   if (name === 'messages') renderMessages();
   if (name === 'newlisting') renderListingQuotaBar();
 }
-function navHome() { pageHistory = ['home']; _goPage('home'); setBN('home'); }
+function navHome() { 
+  if (currentPage !== 'home') {
+    showPage('home');
+  }
+}
+
+// Rename renderProfile to avoid confusion if needed, or keep it.
+// I'll keep it as renderProfile for now.
+function renderProfileProfileSection() {
+  if (typeof renderProfile === 'function') renderProfile();
+}
 function requireLoginThen(p) { if (!user) { showPage('auth'); toast('Please sign in first 🔐'); return; } showPage(p); }
 function setBN(n) { document.querySelectorAll('.bn').forEach(b=>b.classList.remove('active')); const el=document.getElementById('bn-'+n); if(el) el.classList.add('active'); }
 function handleProfileNav() { setBN('profile'); if(user) showPage('profile'); else showPage('auth'); }
@@ -2225,7 +2286,7 @@ function placeOrder() {
   if(!valid)return;
   addNotif({icon:'🛍️',text:`Your order has been placed! Order #9JA-${Math.floor(10000+Math.random()*90000)}`,time:nowTime(),unread:true});
   document.getElementById('orderNum').textContent=Math.floor(10000+Math.random()*90000);
-  cart=[]; updateCartUI(); pageHistory=['home','success']; _goPage('success'); saveSession();
+  cart=[]; updateCartUI(); showPage('success'); saveSession();
 }
 
 /* ═══════════════════════════════════════════
@@ -2247,9 +2308,8 @@ function genUID(){const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let u='';for(le
 function triggerAvatarUpload(){document.getElementById('avInput').click();}
 function handleAvatar(input){
   const f=input.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=e=>{
-    user.avatarSrc=e.target.result;
+  compressImage(f).then(compressedDataUrl => {
+    user.avatarSrc=compressedDataUrl;
     const pav=document.getElementById('pav');
     pav.innerHTML=`<img src="${user.avatarSrc}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"><input type="file" id="avInput" accept="image/*" style="display:none" onchange="handleAvatar(this)">`;
     const av=document.getElementById('userAvatar');av.innerHTML=`<img src="${user.avatarSrc}" style="width:100%;height:100%;object-fit:cover;">`;
@@ -2258,8 +2318,7 @@ function handleAvatar(input){
     var avKey = user.email.toLowerCase();
     if(avAccs[avKey]){ avAccs[avKey].profile = user; setAdminData('accounts', avAccs); }
     saveSession();toast('Photo updated! 📸','ok');
-  };
-  r.readAsDataURL(f);
+  });
 }
 /* renderProfile and showProfileSection — defined in override section below */
 function saveProfile(){
@@ -2274,10 +2333,15 @@ function saveProfile(){
   const av=document.getElementById('userAvatar');
   if(!user.avatarSrc)av.textContent=user.initials;
   document.getElementById('pName').textContent=user.name;
-  // Sync updated profile to persistent accounts store
+  // Sync to local store
   var accounts = getAdminData('accounts') || {};
   var key = user.email.toLowerCase();
   if (accounts[key]) { accounts[key].profile = user; setAdminData('accounts', accounts); }
+  // Sync profile to Firebase
+  if (_fbReady()) {
+    const { db, ref, update } = window._fb;
+    update(ref(db, 'accounts/' + _fbAccKey(user.email)), { profile: user }).catch(e => console.warn('profile sync:', e));
+  }
   saveSession(); syncUserToAdmin(); toast('Profile saved! ✓','ok');
 }
 function copyUID(){if(navigator.clipboard)navigator.clipboard.writeText(user.uid);toast('Account ID copied! ✓','ok');}
@@ -3348,9 +3412,8 @@ function handleListingImg(input) {
     toast('Image too large. Max 5MB.', 'warn');
     return;
   }
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    listingImgData = e.target.result;
+  compressImage(file).then(compressedDataUrl => {
+    listingImgData = compressedDataUrl;
     // Show preview
     const preview = document.getElementById('uploadPreview');
     const previewImg = document.getElementById('uploadPreviewImg');
@@ -3361,8 +3424,7 @@ function handleListingImg(input) {
     if (placeholder) placeholder.style.display = 'none';
     if (hint) hint.style.display = 'block';
     toast('Photo uploaded! ✓', 'ok');
-  };
-  reader.readAsDataURL(file);
+  });
 }
 
 function resetListingForm() {
@@ -3512,15 +3574,19 @@ function doLogout(){
 }
 function confirmLogout(){openConf('Sign Out','Are you sure you want to sign out?',doLogout);}
 function confirmDeleteAccount(){
-  openConf('Delete Account','This will permanently delete your account and all your data. Cannot be undone.',function(){
+  openConf('Delete Account','This will permanently delete your account and all your data. Cannot be undone.',async function(){
     if(user){
-      // Add to deleted blacklist so they cannot re-register
+      if (_fbReady()) {
+        const { db, ref, update } = window._fb;
+        // Mark deleted in Firebase — blocks re-registration
+        await update(ref(db, 'accounts/' + _fbAccKey(user.email)), { deleted: true, deletedAt: Date.now() });
+      }
+      // Also mark in local store as fallback
       var deleted = getAdminData('deletedAccounts') || [];
       if(!deleted.find(function(d){ return d.email===user.email; })){
         deleted.push({email:user.email, uid:user.uid, name:user.name, deletedAt:nowFull()});
         setAdminData('deletedAccounts', deleted);
       }
-      // Remove from accounts store
       var accounts = getAdminData('accounts') || {};
       delete accounts[user.email.toLowerCase()];
       setAdminData('accounts', accounts);
@@ -3534,123 +3600,198 @@ function confirmDeleteAccount(){
    ALSO update doLogin/doSignup to add plan field
 ═══════════════════════════════════════════ */
 function isAccountDeleted(email) {
+  // Sync local check only — Firebase check happens async in doLogin/doSignup
   var deleted = getAdminData('deletedAccounts') || [];
   return deleted.some(function(d) { return d.email.toLowerCase() === email.toLowerCase(); });
 }
 
-function doLogin(){
-  const email = document.getElementById('loginEmail').value.trim();
+// ── Firebase account key: encode email as safe Firebase path key ──
+function _fbAccKey(email) {
+  return email.toLowerCase().replace(/\./g,'_dot_').replace(/@/g,'_at_');
+}
+
+// ── Show/hide auth loading spinner ──
+function _authLoading(show, btnId) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  if (show) { btn.dataset.orig = btn.textContent; btn.textContent = '⏳ Please wait…'; btn.disabled = true; }
+  else { btn.textContent = btn.dataset.orig || btn.textContent; btn.disabled = false; }
+}
+
+async function doLogin(){
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
   const pass  = document.getElementById('loginPass').value;
   const errEl = document.getElementById('loginErr');
+
   if (!email || !pass || pass.length < 4) {
     errEl.textContent = 'Please enter a valid email and password.';
     errEl.classList.remove('hidden');
     document.getElementById('loginEmail').classList.add('err');
     return;
   }
-  // Block permanently deleted accounts
-  if (isAccountDeleted(email)) {
-    errEl.textContent = '❌ This account has been permanently deleted. Contact admin for help.';
-    errEl.classList.remove('hidden');
-    document.getElementById('loginEmail').classList.add('err');
-    return;
-  }
   errEl.classList.add('hidden');
   document.getElementById('loginEmail').classList.remove('err');
+  _authLoading(true, 'loginBtn');
 
-  // Look up persistent account store — same email always gets same UID & password
-  var accounts = getAdminData('accounts') || {};
-  var existing = accounts[email.toLowerCase()];
+  try {
+    // ── Firebase lookup ──
+    if (_fbReady()) {
+      const { db, ref, get } = window._fb;
+      const snap = await get(ref(db, 'accounts/' + _fbAccKey(email)));
 
-  if (existing) {
-    // Returning user — verify password
-    if (existing.pass !== pass) {
-      errEl.textContent = 'Incorrect password. Try again.';
-      errEl.classList.remove('hidden');
-      return;
+      if (!snap.exists()) {
+        errEl.textContent = 'No account found with this email. Please create an account.';
+        errEl.classList.remove('hidden');
+        _authLoading(false, 'loginBtn');
+        return;
+      }
+
+      const acct = snap.val();
+
+      if (acct.deleted) {
+        errEl.textContent = '❌ This account has been permanently deleted. Contact admin for help.';
+        errEl.classList.remove('hidden');
+        _authLoading(false, 'loginBtn');
+        return;
+      }
+      if (acct.pass !== pass) {
+        errEl.textContent = 'Incorrect password. Try again.';
+        errEl.classList.remove('hidden');
+        _authLoading(false, 'loginBtn');
+        return;
+      }
+      if (acct.restricted) {
+        errEl.textContent = '🚫 Your account has been restricted. Contact admin: 07089970137';
+        errEl.classList.remove('hidden');
+        _authLoading(false, 'loginBtn');
+        return;
+      }
+
+      user = acct.profile;
+      if (acct.plan && acct.plan !== 'free') { user.plan = acct.plan; user.planExpiry = acct.planExpiry || ''; }
+
+    } else {
+      // Local fallback
+      var accounts = getAdminData('accounts') || {};
+      var existing = accounts[email];
+      if (!existing) { errEl.textContent = 'No account found. Please create an account.'; errEl.classList.remove('hidden'); _authLoading(false,'loginBtn'); return; }
+      if (existing.pass !== pass) { errEl.textContent = 'Incorrect password.'; errEl.classList.remove('hidden'); _authLoading(false,'loginBtn'); return; }
+      user = existing.profile;
     }
-    user = existing.profile;
-  } else {
-    // No account found — prompt to sign up
-    errEl.textContent = 'No account found with this email. Please create an account.';
-    errEl.classList.remove('hidden');
-    return;
-  }
 
-  // Sync restrictions and plan from admin records
-  var adminUsers = getAdminData('users') || [];
-  var adminRecord = adminUsers.find(function(u) { return u.uid === user.uid || u.email.toLowerCase() === email.toLowerCase(); });
-  if (adminRecord && adminRecord.restricted) {
-    errEl.textContent = '🚫 Your account has been restricted. Contact admin: 07089970137';
-    errEl.classList.remove('hidden');
-    return;
-  }
-  if (adminRecord && adminRecord.plan && adminRecord.plan !== 'free') {
-    user.plan = adminRecord.plan;
-    user.planExpiry = adminRecord.planExpiry || '';
-  }
+    applyLogin();
+    showPage('home');
+    toast('Welcome back, ' + user.name + '! 👋', 'ok');
 
-  applyLogin();
-  showPage('home');
-  toast('Welcome back, ' + user.name + '! 👋', 'ok');
+  } catch(e) {
+    errEl.textContent = 'Connection error. Check your internet and try again.';
+    errEl.classList.remove('hidden');
+    console.error('doLogin error:', e);
+  }
+  _authLoading(false, 'loginBtn');
 }
 
-function doSignup(){
+async function doSignup(){
   const first = document.getElementById('signupFirst').value.trim() || 'User';
   const last  = document.getElementById('signupLast').value.trim();
-  const email = document.getElementById('signupEmail').value.trim();
+  const email = document.getElementById('signupEmail').value.trim().toLowerCase();
   const pass  = document.getElementById('signupPass').value;
   const state = document.getElementById('signupState').value;
   let valid = true;
 
+  // Clear previous errors
+  document.getElementById('signupEmailErr').classList.add('hidden');
+  document.getElementById('signupPassErr').classList.add('hidden');
+
   if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
     document.getElementById('signupEmailErr').textContent = 'Please enter a valid email.';
     document.getElementById('signupEmailErr').classList.remove('hidden'); valid = false;
-  } else {
-    document.getElementById('signupEmailErr').classList.add('hidden');
   }
   if (pass.length < 8) {
     document.getElementById('signupPassErr').classList.remove('hidden'); valid = false;
-  } else {
-    document.getElementById('signupPassErr').classList.add('hidden');
   }
   if (!valid) return;
 
-  // Block deleted email from re-registering
-  if (isAccountDeleted(email)) {
-    document.getElementById('signupEmailErr').textContent = '❌ This email is permanently blocked by admin.';
+  _authLoading(true, 'signupBtn');
+
+  try {
+    if (_fbReady()) {
+      const { db, ref, get, set } = window._fb;
+      const acctRef = ref(db, 'accounts/' + _fbAccKey(email));
+      const snap = await get(acctRef);
+
+      if (snap.exists()) {
+        const existing = snap.val();
+        if (existing.deleted) {
+          document.getElementById('signupEmailErr').textContent = '❌ This email is permanently blocked by admin.';
+        } else {
+          document.getElementById('signupEmailErr').textContent = 'An account with this email already exists. Please sign in.';
+        }
+        document.getElementById('signupEmailErr').classList.remove('hidden');
+        _authLoading(false, 'signupBtn');
+        return;
+      }
+
+      // Create new account
+      const fullName = (first + (last ? ' ' + last : '')).trim();
+      const newUser = {
+        name: fullName, firstName: first, lastName: last||'',
+        initials: (first[0]+(last?last[0]:'')).toUpperCase()||'U',
+        email, phone:'', address:'', dob:'', state: state||'',
+        uid: genUID(), avatarSrc: null, plan:'free', restricted: false
+      };
+
+      // Save to Firebase — globally unique by email key
+      await set(acctRef, {
+        pass,
+        profile:   newUser,
+        plan:      'free',
+        restricted: false,
+        deleted:   false,
+        createdAt: Date.now()
+      });
+
+      user = newUser;
+      // Also keep local copy as fallback
+      var accounts = getAdminData('accounts') || {};
+      accounts[email] = { pass, profile: newUser };
+      setAdminData('accounts', accounts);
+
+    } else {
+      // Local fallback
+      var accounts = getAdminData('accounts') || {};
+      if (accounts[email]) {
+        document.getElementById('signupEmailErr').textContent = 'An account with this email already exists. Please sign in.';
+        document.getElementById('signupEmailErr').classList.remove('hidden');
+        _authLoading(false, 'signupBtn');
+        return;
+      }
+      const fullName = (first + (last ? ' ' + last : '')).trim();
+      user = {
+        name:fullName, firstName:first, lastName:last||'',
+        initials:(first[0]+(last?last[0]:'')).toUpperCase()||'U',
+        email, phone:'', address:'', dob:'', state:state||'',
+        uid:genUID(), avatarSrc:null, plan:'free', restricted:false
+      };
+      accounts[email] = { pass, profile: user };
+      setAdminData('accounts', accounts);
+    }
+
+    applyLogin();
+    showPage('home');
+    toast('Account created! Welcome 🎉', 'ok');
+
+  } catch(e) {
+    document.getElementById('signupEmailErr').textContent = 'Connection error. Check your internet and try again.';
     document.getElementById('signupEmailErr').classList.remove('hidden');
-    return;
+    console.error('doSignup error:', e);
   }
-
-  // Block duplicate registration with same email
-  var accounts = getAdminData('accounts') || {};
-  if (accounts[email.toLowerCase()]) {
-    document.getElementById('signupEmailErr').textContent = 'An account with this email already exists. Please sign in.';
-    document.getElementById('signupEmailErr').classList.remove('hidden');
-    return;
-  }
-
-  const fullName = (first + (last ? ' ' + last : '')).trim();
-  user = {
-    name:fullName, firstName:first, lastName:last||'',
-    initials:(first[0]+(last?last[0]:'')).toUpperCase()||'U',
-    email, phone:'', address:'', dob:'', state:state||'',
-    uid:genUID(), avatarSrc:null, plan:'free', restricted:false
-  };
-
-  // Save permanently so password is remembered and UID is stable
-  accounts[email.toLowerCase()] = { pass, profile: user };
-  setAdminData('accounts', accounts);
-
-  applyLogin();
-  showPage('home');
-  toast('Account created! Welcome 🎉', 'ok');
+  _authLoading(false, 'signupBtn');
 }
 
 
 
-function changePassword() {
+async function changePassword() {
   var cur  = document.getElementById('pwCurrent')  ? document.getElementById('pwCurrent').value  : '';
   var nw   = document.getElementById('pwNew')       ? document.getElementById('pwNew').value       : '';
   var conf = document.getElementById('pwConfirm')   ? document.getElementById('pwConfirm').value   : '';
@@ -3658,16 +3799,6 @@ function changePassword() {
 
   if (!cur || !nw || !conf) {
     if (msg) { msg.style.color = 'var(--danger)'; msg.textContent = 'Please fill in all fields.'; }
-    return;
-  }
-  var accounts = getAdminData('accounts') || {};
-  var key = user.email.toLowerCase();
-  if (!accounts[key]) {
-    if (msg) { msg.style.color = 'var(--danger)'; msg.textContent = 'Account not found.'; }
-    return;
-  }
-  if (accounts[key].pass !== cur) {
-    if (msg) { msg.style.color = 'var(--danger)'; msg.textContent = 'Current password is incorrect.'; }
     return;
   }
   if (nw.length < 8) {
@@ -3678,18 +3809,48 @@ function changePassword() {
     if (msg) { msg.style.color = 'var(--danger)'; msg.textContent = 'New passwords do not match.'; }
     return;
   }
-  accounts[key].pass = nw;
-  setAdminData('accounts', accounts);
-  ['pwCurrent','pwNew','pwConfirm'].forEach(function(id) {
-    var el = document.getElementById(id); if (el) el.value = '';
-  });
-  if (msg) { msg.style.color = 'var(--success)'; msg.textContent = '✓ Password updated successfully.'; }
-  toast('Password changed! 🔒', 'ok');
+
+  if (msg) { msg.style.color = 'var(--text-muted)'; msg.textContent = '⏳ Verifying…'; }
+
+  try {
+    if (_fbReady()) {
+      const { db, ref, get, update } = window._fb;
+      const snap = await get(ref(db, 'accounts/' + _fbAccKey(user.email)));
+      if (!snap.exists()) {
+        if (msg) { msg.style.color = 'var(--danger)'; msg.textContent = 'Account not found.'; } return;
+      }
+      if (snap.val().pass !== cur) {
+        if (msg) { msg.style.color = 'var(--danger)'; msg.textContent = 'Current password is incorrect.'; } return;
+      }
+      await update(ref(db, 'accounts/' + _fbAccKey(user.email)), { pass: nw });
+    } else {
+      var accounts = getAdminData('accounts') || {};
+      var key = user.email.toLowerCase();
+      if (!accounts[key]) { if (msg) { msg.style.color='var(--danger)'; msg.textContent='Account not found.'; } return; }
+      if (accounts[key].pass !== cur) { if (msg) { msg.style.color='var(--danger)'; msg.textContent='Current password is incorrect.'; } return; }
+      accounts[key].pass = nw;
+      setAdminData('accounts', accounts);
+    }
+
+    // Also update local fallback
+    var accounts = getAdminData('accounts') || {};
+    if (accounts[user.email.toLowerCase()]) { accounts[user.email.toLowerCase()].pass = nw; setAdminData('accounts', accounts); }
+
+    ['pwCurrent','pwNew','pwConfirm'].forEach(function(id) {
+      var el = document.getElementById(id); if (el) el.value = '';
+    });
+    if (msg) { msg.style.color = 'var(--success)'; msg.textContent = '✓ Password updated successfully.'; }
+    toast('Password changed! 🔒', 'ok');
+
+  } catch(e) {
+    if (msg) { msg.style.color = 'var(--danger)'; msg.textContent = 'Error updating password. Try again.'; }
+  }
 }
 
 /* ═══════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════ */
+history.replaceState({page: 'home'}, null, '#home');
 populateSelects();
 renderBillboard();
 renderStatesGrid();
