@@ -1918,17 +1918,9 @@ function startChat(productId) {
         participants: { [user.uid]: true, [p.sellerUID]: true }
       });
 
-      // Check if messages already exist before pushing safety reminder
+      // Check if messages already exist
       const msgsRef = ref(db, 'messages/' + convId);
       const msgsSnap = await get(msgsRef);
-      if (!msgsSnap.exists()) {
-        await push(msgsRef, {
-          from:    'system',
-          text:    '⚠️ Safety reminder: Never share bank details, OTPs or passwords. Verify items before payment. 9JA Market does not process payments.',
-          senderUID: 'system',
-          ts:      serverTimestamp()
-        });
-      }
     }
     
     currentConvId = convId;
@@ -1952,7 +1944,7 @@ function _localStartChat(productId, p) {
       id: convId, productId, productName: p.name,
       sellerName: p.seller, sellerUID: p.sellerUID,
       avatarText: p.seller.slice(0,2).toUpperCase(),
-      messages: [{from:'system', text:'⚠️ Safety reminder: Never share bank details, OTPs or passwords. Verify items before payment.', time:nowTime()}],
+      messages: [],
       unread: 0, lastTime: nowTime(), lastMsg: 'Conversation started'
     };
   }
@@ -2113,7 +2105,6 @@ function openConvById(convId) {
         <button onclick="chatWAByConv('${convId}')" style="display:flex;align-items:center;gap:5px;padding:6px 12px;background:var(--wa);color:#fff;border-radius:50px;font-size:12px;font-weight:600;">${waIconSVG} WhatsApp</button>
       </div>
     </div>
-    <div class="chat-scam"><span>⚠️</span><span><strong>Anti-Scam:</strong> Never share bank details or OTPs. Always verify before payment. Meet in a safe place.</span></div>
     <div class="chat-msgs" id="chatMsgs">
       <div style="text-align:center;padding:20px;color:var(--text-light);font-size:13px"><div class="ptr-spin" style="margin:0 auto 8px"></div>Loading messages…</div>
     </div>
