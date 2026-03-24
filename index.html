@@ -89,7 +89,7 @@ nav{background:var(--surface);border-bottom:1px solid var(--border);position:sti
 .bn-badge.hidden{display:none}
 
 /* ── PAGE BASE ── */
-.page{display:none;height:calc(100vh - 64px);background:var(--bg);overflow:hidden}
+.page{display:none;height:calc(100vh - 64px);background:var(--bg)}
 .page.active{display:block}
 #page-messages.page.active{display:flex;flex-direction:column}
 /* ── MAIN ── */
@@ -914,8 +914,8 @@ document.addEventListener('fb-ready', () => {
 <!-- ═══ PAGES ═══ -->
 
 <!-- HOME -->
-<div class="page active" id="page-home">
-  <main>
+<div class="page active" id="page-home" style="height:calc(100vh - 64px)">
+  <main style="height:100%;overflow-y:auto">
     <div class="billboard" id="billboard">
       <div class="bb-timer" id="bbTimer" style="width:0%"></div>
       <button class="bb-arrow bb-prev" onclick="bbPrev()">‹</button>
@@ -1006,13 +1006,13 @@ document.addEventListener('fb-ready', () => {
 </div>
 
 <!-- MESSAGES -->
-<div class="page" id="page-messages" style="height:calc(100vh - 64px);overflow:hidden;display:none;flex-direction:column">
-  <main style="padding:0;max-width:100%;flex:1;display:flex;flex-direction:column;overflow:hidden">
+<div class="page" id="page-messages" style="height:calc(100vh - 64px);flex-direction:column">
+  <main style="padding:0;max-width:100%;flex:1;display:flex;flex-direction:column;overflow:hidden;height:100%">
     <div style="max-width:1280px;width:100%;margin:0 auto;padding:16px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0">
       <button class="back-btn" onclick="goBack()" style="margin:0">← Back</button>
       <h2 style="font-size:20px;font-weight:700;flex:1">Messages</h2>
     </div>
-    <div class="msgs-layout" id="msgsLayout" style="flex:1;min-height:0">
+    <div class="msgs-layout" id="msgsLayout" style="flex:1;min-height:0;height:100%">
       <!-- LEFT: conversations list -->
       <div class="convos-list" id="convosList">
         <div class="convos-hdr">
@@ -1022,8 +1022,8 @@ document.addEventListener('fb-ready', () => {
         <div id="convosBody"></div>
       </div>
       <!-- RIGHT: chat area -->
-    <div class="chat-area" id="chatArea" style="flex:1;display:flex;flex-direction:column;min-height:0">
-        <div class="no-convo" id="noChatSelected" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center">
+    <div class="chat-area" id="chatArea" style="flex:1;display:flex;flex-direction:column;min-height:0;height:100%">
+        <div class="no-convo" id="noChatSelected" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%">
           <div style="font-size:52px;margin-bottom:12px">💬</div>
           <p style="font-size:15px;font-weight:600;margin-bottom:4px">Select a conversation</p>
           <p style="font-size:13px">Choose a chat from the left to start messaging</p>
@@ -1035,8 +1035,8 @@ document.addEventListener('fb-ready', () => {
 </div>
 
 <!-- PROFILE -->
-<div class="page" id="page-profile">
-  <main>
+<div class="page" id="page-profile" style="height:calc(100vh - 64px)">
+  <main style="height:100%;overflow-y:auto">
     <div style="padding-top:20px"><button class="back-btn" onclick="goBack()"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg> Back</button></div>
     <div class="profile-layout">
       <div class="profile-sidebar">
@@ -1076,8 +1076,8 @@ document.addEventListener('fb-ready', () => {
 </div>
 
 <!-- DASHBOARD -->
-<div class="page" id="page-dashboard">
-  <main style="padding-top:28px;">
+<div class="page" id="page-dashboard" style="height:calc(100vh - 64px)">
+  <main style="padding-top:28px;height:100%;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:10px">
       <div>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:3px">Welcome back,</div>
