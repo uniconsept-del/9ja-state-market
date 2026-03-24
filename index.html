@@ -298,6 +298,12 @@ main{max-width:1280px;margin:0 auto;padding:0 20px 96px}
 .chat-scam{background:#fff8e1;border-bottom:1px solid #fde68a;padding:9px 16px;font-size:11px;color:#92400e;display:flex;gap:7px}
 .chat-scam span:last-child{line-height:1.5}
 .chat-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:9px;min-height:0}
+.chat-ad-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:10px;margin:4px 0 12px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:transform .2s;flex-shrink:0}
+.chat-ad-card:active{transform:scale(0.98)}
+.chat-ad-card img{width:44px;height:44px;object-fit:cover;border-radius:6px}
+.chat-ad-info{flex:1;min-width:0}
+.chat-ad-name{font-size:13px;font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-ad-price{font-size:12px;font-weight:700;color:var(--brand)}
 .msg{max-width:76%;padding:9px 13px;border-radius:16px;font-size:14px;line-height:1.5;word-break:break-word}
 .msg.them{background:var(--surface);color:var(--text);border-bottom-left-radius:4px;align-self:flex-start;box-shadow:var(--shadow)}
 .msg.me{background:var(--brand);color:#fff;border-bottom-right-radius:4px;align-self:flex-end}
@@ -2106,6 +2112,7 @@ function openConvById(convId) {
       </div>
     </div>
     <div class="chat-msgs" id="chatMsgs">
+      ${getChatAdCardHTML(conv)}
       <div style="text-align:center;padding:20px;color:var(--text-light);font-size:13px"><div class="ptr-spin" style="margin:0 auto 8px"></div>Loading messages…</div>
     </div>
     <div class="chat-input-row">
@@ -2116,6 +2123,21 @@ function openConvById(convId) {
   // Subscribe to real-time messages
   _subscribeMessages(convId);
   saveSession();
+}
+
+function getChatAdCardHTML(conv) {
+  if (!conv || !conv.productId) return '';
+  const p = PRODUCTS_DB.find(x => x.id === Number(conv.productId));
+  if (!p) return '';
+  return `
+    <div class="chat-ad-card" onclick="openProduct(${p.id})">
+      ${p.img ? `<img src="${p.img}" alt="${p.name}">` : `<div style="width:44px;height:44px;background:var(--border);display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:20px">${p.emoji||'📦'}</div>`}
+      <div class="chat-ad-info">
+        <div class="chat-ad-name">${p.name}</div>
+        <div class="chat-ad-price">₦${p.price.toLocaleString()}</div>
+      </div>
+      <div style="font-size:12px;color:var(--brand);font-weight:600">View →</div>
+    </div>`;
 }
 
 // ── Real-time message subscription ───────────────────
@@ -2145,7 +2167,10 @@ function _subscribeMessages(convId) {
 
     const wasAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 60;
 
-    container.innerHTML = msgs.map(m => {
+    const conv = conversations[convId];
+    const adCard = getChatAdCardHTML(conv);
+
+    container.innerHTML = adCard + msgs.map(m => {
       const isMe = m.senderUID === (user ? user.uid : '');
       const cls  = m.from === 'system' ? 'sys' : isMe ? 'me' : 'them';
       const time = m.ts ? new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : (m.time || '');
@@ -2178,7 +2203,6 @@ function _subscribeMessages(convId) {
     if (statusEl) statusEl.textContent = '● Live';
 
     // Unread badge — count messages from others not seen
-    const conv = conversations[convId];
     if (conv) { conv.unread = 0; updateMsgBadge(); }
   });
 }
@@ -2195,7 +2219,7 @@ function closeMobileChat() {
 function renderMsgsLocal(convId) {
   const conv = conversations[convId]; if (!conv) return;
   const container = document.getElementById('chatMsgs'); if (!container) return;
-  container.innerHTML = (conv.messages || []).map(m => `
+  container.innerHTML = getChatAdCardHTML(conv) + (conv.messages || []).map(m => `
     <div class="msg ${m.from==='me'?'me':m.from==='system'?'sys':'them'}">
       ${m.text}<div class="msg-time">${m.time||''}</div>
     </div>`).join('');
