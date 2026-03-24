@@ -758,8 +758,17 @@ try {
       const data = snap.val();
       // Convert object to array
       PRODUCTS_DB = Object.values(data);
+      
+      // Update sellerListings for current user
+      if (user) {
+        sellerListings = PRODUCTS_DB.filter(p => p.sellerUID === user.uid);
+        saveSession();
+      }
+      
       renderProducts();
       renderStatesGrid();
+      if (currentPage === 'dashboard') renderDashboard();
+      if (currentPage === 'profile') renderProfile();
     }
   });
 } catch (error) {
@@ -1449,7 +1458,6 @@ let notifications = [];           // real notifications only
 let conversations = {};            // {convId: {name, productName, productId, avatarText, avatarSrc, messages:[], unread:0}}
 let currentConvId = null;
 let sellerListings = [];
-let pendingListings = [];
 let likedProducts = new Set();
 let currentPage = 'home';
 let currentCat = 'all';
@@ -1867,26 +1875,38 @@ function _checkFbConfig() {
 }
 
 // ── Start / open a chat ───────────────────────────────
+let _startingChat = false;
+
 function startChat(productId) {
   if (!user) { toast('Sign in to chat 🔐'); showPage('auth'); return; }
-  const p = PRODUCTS_DB.find(x => x.id === productId); if (!p) return;
+  // Ensure productId is a number for searching
+  const pid = Number(productId);
+  const p = PRODUCTS_DB.find(x => x.id === pid); 
+  if (!p) {
+    console.warn('Product not found in DB:', pid);
+    toast('Could not start chat. Product missing.', 'warn');
+    return; 
+  }
+
+  if (_startingChat) return;
+  _startingChat = true;
 
   if (!_checkFbConfig()) {
-    // Fallback: local-only conversation so UX still works without Firebase
-    _localStartChat(productId, p);
+    _localStartChat(pid, p);
+    _startingChat = false;
     return;
   }
 
-  const convId = _convId(productId);
-  const { db, ref, set, get } = window._fb;
+  const convId = _convId(pid);
+  const { db, ref, set, get, push, serverTimestamp } = window._fb;
 
-  // Create conv meta if it doesn't exist
   const convRef = ref(db, 'conversations/' + convId);
-  get(convRef).then(snap => {
+  get(convRef).then(async (snap) => {
     if (!snap.exists()) {
-      set(convRef, {
+      // Create conversation metadata
+      await set(convRef, {
         id: convId,
-        productId,
+        productId: pid,
         productName: p.name,
         sellerName:  p.seller,
         sellerUID:   p.sellerUID,
@@ -1894,23 +1914,34 @@ function startChat(productId) {
         buyerName:   user.name,
         avatarText:  p.seller.slice(0,2).toUpperCase(),
         lastMsg:     'Conversation started',
-        lastTime:    Date.now(),
-        // Track both participants so they can each see the thread
+        lastTime:    serverTimestamp(),
         participants: { [user.uid]: true, [p.sellerUID]: true }
       });
-      // Post system anti-scam message
-      const { push, serverTimestamp } = window._fb;
-      push(ref(db, 'messages/' + convId), {
-        from:    'system',
-        text:    '⚠️ Safety reminder: Never share bank details, OTPs or passwords. Verify items before payment. 9JA Market does not process payments.',
-        senderUID: 'system',
-        ts:      serverTimestamp()
-      });
+
+      // Check if messages already exist before pushing safety reminder
+      const msgsRef = ref(db, 'messages/' + convId);
+      const msgsSnap = await get(msgsRef);
+      if (!msgsSnap.exists()) {
+        await push(msgsRef, {
+          from:    'system',
+          text:    '⚠️ Safety reminder: Never share bank details, OTPs or passwords. Verify items before payment. 9JA Market does not process payments.',
+          senderUID: 'system',
+          ts:      serverTimestamp()
+        });
+      }
     }
+    
     currentConvId = convId;
     showPage('messages');
-    setTimeout(() => openConvById(convId), 80);
-  }).catch(() => { _localStartChat(productId, p); });
+    setTimeout(() => {
+      openConvById(convId);
+      _startingChat = false;
+    }, 100);
+  }).catch((err) => { 
+    console.error('startChat error:', err);
+    _localStartChat(pid, p); 
+    _startingChat = false;
+  });
 }
 
 // Local fallback when Firebase not configured
@@ -2128,10 +2159,28 @@ function _subscribeMessages(convId) {
       const cls  = m.from === 'system' ? 'sys' : isMe ? 'me' : 'them';
       const time = m.ts ? new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : (m.time || '');
       const senderLabel = (!isMe && m.from !== 'system' && m.senderName) ? `<div style="font-size:10px;font-weight:700;color:var(--brand);margin-bottom:3px">${m.senderName}</div>` : '';
-      return `<div class="msg ${cls}">${senderLabel}${m.text}<div class="msg-time">${time}${isMe ? ' ✓' : ''}</div></div>`;
+      
+      // Sent/Read indicators
+      let statusIcon = '';
+      if (isMe && m.from !== 'system') {
+        if (m.read) statusIcon = '<span style="color:var(--brand);margin-left:4px;font-size:12px;font-weight:700">✓✓</span>';
+        else statusIcon = '<span style="color:var(--text-light);margin-left:4px;font-size:12px">✓</span>';
+      }
+
+      return `<div class="msg ${cls}">${senderLabel}${m.text}<div class="msg-time">${time}${statusIcon}</div></div>`;
     }).join('');
 
     if (wasAtBottom) container.scrollTop = container.scrollHeight;
+
+    // Mark messages from others as READ if we are currently viewing the conversation
+    if (currentPage === 'messages' && currentConvId === convId) {
+      const { db, ref, update } = window._fb;
+      msgs.forEach(m => {
+        if (m.senderUID !== user.uid && !m.read && m.from !== 'system') {
+          update(ref(db, `messages/${convId}/${m.key}`), { read: true });
+        }
+      });
+    }
 
     // Show live indicator
     const statusEl = document.getElementById('chatOnlineStatus');
@@ -2189,7 +2238,8 @@ function sendMsg(convId) {
     text,
     senderUID:  user.uid,
     senderName: user.name,
-    ts:         serverTimestamp()
+    ts:         serverTimestamp(),
+    read:       false
   });
 
   // Update conversation last message
@@ -2197,6 +2247,18 @@ function sendMsg(convId) {
     lastMsg:  text,
     lastTime: Date.now()
   });
+
+  // Notify the other participant instantly
+  const otherUID = conv.buyerUID === user.uid ? conv.sellerUID : conv.buyerUID;
+  if (otherUID) {
+    addNotif({
+      icon: '💬',
+      text: `New message from ${user.name} about "${conv.productName}"`,
+      time: nowTime(),
+      unread: true,
+      targetUID: otherUID
+    });
+  }
 
   if (conv) addNotif({icon:'💬', text:`Message sent to ${conv.sellerName} about "${conv.productName}"`, time:nowTime(), unread:false});
   saveSession();
@@ -2288,7 +2350,53 @@ function chatWA(productId) {
 /* ═══════════════════════════════════════════
    NOTIFICATIONS — Real only, no seeds
 ═══════════════════════════════════════════ */
-function addNotif(n) { notifications.unshift(n); updateNotifBadge(); saveSession(); }
+async function addNotif(n) {
+  notifications.unshift(n);
+  updateNotifBadge();
+  saveSession();
+  
+  // If we have a target UID (someone else), push to their Firebase notifications
+  if (n.targetUID && _fbReady()) {
+    const { db, ref, push, serverTimestamp } = window._fb;
+    try {
+      await push(ref(db, `notifications/${n.targetUID}`), {
+        ...n,
+        ts: serverTimestamp(),
+        unread: true
+      });
+    } catch (e) { console.error('Error sending notification:', e); }
+  }
+}
+
+// Global listener for notifications (added in applyLogin)
+let _fbNotifListener = null;
+function listenForGlobalNotifs() {
+  if (!user || !_fbReady()) return;
+  const { db, ref, onValue, update } = window._fb;
+  
+  if (_fbNotifListener) { _fbNotifListener(); _fbNotifListener = null; }
+  
+  _fbNotifListener = onValue(ref(db, `notifications/${user.uid}`), snap => {
+    if (snap.exists()) {
+      const data = snap.val();
+      const newNotifs = Object.entries(data).map(([key, val]) => ({ key, ...val }));
+      
+      // Filter out notifications we already have locally
+      newNotifs.forEach(n => {
+        const exists = notifications.some(local => local.key === n.key || (local.text === n.text && local.time === n.time));
+        if (!exists) {
+          notifications.unshift(n);
+          // Show toast for new unread notification
+          if (n.unread) toast(n.icon + ' ' + n.text, 'ok');
+        }
+      });
+      
+      updateNotifBadge();
+      saveSession();
+      if (currentPage === 'notifications') renderNotifications();
+    }
+  });
+}
 function updateNotifBadge() {
   const count = notifications.filter(n=>n.unread).length;
   const el = document.getElementById('notifBadge'); if(el){el.textContent=count;el.classList.toggle('hidden',count===0);}
@@ -2393,8 +2501,9 @@ function renderDashboard(){
   if(!user){showPage('auth');return;}
   document.getElementById('dashWelcome').textContent=user.name;
   const active=sellerListings.filter(l=>!l._pending);
+  const pending=sellerListings.filter(l=>l._pending);
   document.getElementById('dashActive').textContent=active.length;
-  document.getElementById('dashPending').textContent=pendingListings.length;
+  document.getElementById('dashPending').textContent=pending.length;
   document.getElementById('dashMsgs').textContent=Object.keys(conversations).length;
   document.getElementById('dashLikes').textContent=[...likedProducts].length;
 
@@ -2433,7 +2542,7 @@ function renderDashboard(){
     }
   }
 
-  const all=[...active.map(l=>({...l,status:'active'})),...pendingListings.map(l=>({...l,status:'pending'}))];
+  const all=[...active.map(l=>({...l,status:'active'})),...pending.map(l=>({...l,status:'pending'}))];
   document.getElementById('dashListings').innerHTML=all.map(p=>`
     <div class="dt-row">
       <div class="col-n">${p.img?`<img src="${p.img}" style="width:34px;height:34px;object-fit:cover;border-radius:6px" loading="lazy">`:p.emoji||'📦'} ${p.name}</div>
@@ -2471,7 +2580,7 @@ function saveEdit(){
 function confirmDeleteAd(id){
   openConf('Delete Advert','Are you sure you want to delete this advert?',()=>{
     const i=PRODUCTS_DB.findIndex(x=>x.id===id);if(i>-1)PRODUCTS_DB.splice(i,1);
-    sellerListings=sellerListings.filter(x=>x.id!==id);pendingListings=pendingListings.filter(x=>x.id!==id);
+    sellerListings=sellerListings.filter(x=>x.id!==id);
     renderDashboard();renderProducts();toast('Advert deleted.','warn');saveSession();
   });
 }
@@ -2574,7 +2683,7 @@ function getPlanLimit() {
 }
 
 function getUserAdCount() {
-  return sellerListings.filter(l => !l._pending).length + pendingListings.length;
+  return sellerListings.length;
 }
 
 function canPostMore() {
@@ -3512,6 +3621,7 @@ function checkPendingAdverts() {
           saveSession();
           addNotif({icon:'🎉',text:`Your advert "${p.name}" is now live!`,time:nowFull(),unread:true});
           if (currentPage === 'profile') renderProfile();
+          if (currentPage === 'dashboard') renderDashboard();
         }
       }
     }
@@ -3671,6 +3781,9 @@ function applyLogin(isRestore=false){
   else av.textContent=user.initials;
   if(!isRestore){ registerUserInAdmin(user); saveSession(); }
   else { syncUserToAdmin(); }
+  
+  // Start listening for real-time notifications
+  listenForGlobalNotifs();
 }
 
 /* ═══════════════════════════════════════════
@@ -3698,8 +3811,8 @@ function submitReport(){
    OVERRIDE doLogout to clean up
 ═══════════════════════════════════════════ */
 function doLogout(){
-  user=null; cart=[]; conversations={}; notifications=[]; likedProducts=new Set(); sellerListings=[]; pendingListings=[];
-  try{Object.keys(sessionStorage).filter(k=>k.startsWith('9ja_')).forEach(k=>sessionStorage.removeItem(k));}catch(e){}
+  user=null; cart=[]; conversations={}; notifications=[]; likedProducts=new Set(); sellerListings=[];
+  try{Object.keys(localStorage).filter(k=>k.startsWith('9ja_')).forEach(k=>localStorage.removeItem(k));}catch(e){}
   PRODUCTS_DB = [];
   document.getElementById('navSignInBtn').style.display='flex';
   const av=document.getElementById('userAvatar'); av.style.display='none';
@@ -3802,6 +3915,9 @@ async function doLogin(){
 
       user = acct.profile;
       if (acct.plan && acct.plan !== 'free') { user.plan = acct.plan; user.planExpiry = acct.planExpiry || ''; }
+      
+      // Populate sellerListings from PRODUCTS_DB
+      sellerListings = PRODUCTS_DB.filter(p => p.sellerUID === user.uid);
 
     } else {
       // Local fallback
@@ -3810,6 +3926,9 @@ async function doLogin(){
       if (!existing) { errEl.textContent = 'No account found. Please create an account.'; errEl.classList.remove('hidden'); _authLoading(false,'loginBtn'); return; }
       if (existing.pass !== pass) { errEl.textContent = 'Incorrect password.'; errEl.classList.remove('hidden'); _authLoading(false,'loginBtn'); return; }
       user = existing.profile;
+      
+      // Local fallback: populate sellerListings
+      sellerListings = PRODUCTS_DB.filter(p => p.sellerUID === user.uid);
     }
 
     applyLogin();
@@ -3891,6 +4010,7 @@ async function doSignup(){
       });
 
       user = newUser;
+      sellerListings = [];
       // Also keep local copy as fallback
       var accounts = getAdminData('accounts') || {};
       accounts[email] = { pass, profile: newUser };
@@ -3912,6 +4032,7 @@ async function doSignup(){
         email, phone:'', address:'', dob:'', state:state||'',
         uid:genUID(), avatarSrc:null, plan:'free', restricted:false
       };
+      sellerListings = [];
       accounts[email] = { pass, profile: user };
       setAdminData('accounts', accounts);
     }
