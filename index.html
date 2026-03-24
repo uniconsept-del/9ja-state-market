@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>9JA State-Market</title>
 <meta name="description" content="Nigeria's #1 state-by-state marketplace.">
-<meta name="theme-color" content="#6366f1">
+<meta name="theme-color" content="#6366f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="9JA Market">
 <link rel="manifest" id="manifestLink">
@@ -21,6 +22,19 @@
   --shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.06);
   --shadow-lg:0 8px 32px rgba(0,0,0,.12);
   --t:all .2s cubic-bezier(.4,0,.2,1)
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#0f172a;--surface:#1e293b;--surface2:#0f172a;--border:#334155;
+    --text:#f1f5f9;--text-muted:#94a3b8;--text-light:#64748b;
+    --brand-light:rgba(99,102,241,0.1);
+    --shadow:0 4px 6px -1px rgba(0,0,0,0.5);
+    --shadow-lg:0 10px 15px -3px rgba(0,0,0,0.6);
+  }
+  .pending-note, .chat-scam, .msg.sys { background: rgba(217, 119, 6, 0.1) !important; color: #fbbf24 !important; border-color: rgba(251, 191, 36, 0.3) !important; }
+  .help-box { background: linear-gradient(135deg, #064e3b, #065f46) !important; border-color: #059669 !important; }
+  .restricted-notice { background: rgba(220, 38, 38, 0.1) !important; border-color: rgba(220, 38, 38, 0.3) !important; }
+  .sc.active, .cat.active { color: #fff !important; }
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
@@ -101,7 +115,7 @@ main{max-width:1280px;margin:0 auto;padding:0 20px 96px}
 .bb-title{font-family:'Playfair Display',serif;font-size:clamp(20px,4vw,40px);line-height:1.15;margin-bottom:9px}
 .bb-sub{font-size:14px;opacity:.85;max-width:440px;margin-bottom:22px;line-height:1.6}
 .bb-cta{display:flex;gap:10px;flex-wrap:wrap}
-.bb-cta-p{background:#fff;color:var(--brand);font-weight:700;padding:10px 24px;border-radius:50px;font-size:14px;transition:var(--t)}
+.bb-cta-p{background:var(--surface);color:var(--brand);font-weight:700;padding:10px 24px;border-radius:50px;font-size:14px;transition:var(--t)}
 .bb-cta-p:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.2)}
 .bb-cta-g{border:2px solid rgba(255,255,255,.55);color:#fff;font-weight:500;padding:10px 20px;border-radius:50px;font-size:14px;transition:var(--t)}
 .bb-cta-g:hover{background:rgba(255,255,255,.14);border-color:#fff}
@@ -153,12 +167,12 @@ main{max-width:1280px;margin:0 auto;padding:0 20px 96px}
 .pc-rating{font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:2px}
 .star{color:#f59e0b}
 .pc-badge{position:absolute;top:9px;left:9px;background:var(--brand);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:50px}
-.pc-wish{position:absolute;top:9px;right:9px;width:30px;height:30px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.1);color:var(--text-light);font-size:15px;transition:var(--t)}
+.pc-wish{position:absolute;top:9px;right:9px;width:30px;height:30px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.1);color:var(--text-light);font-size:15px;transition:var(--t)}
 .pc-wish:hover{color:var(--danger);transform:scale(1.1)}
 .pc-wish.liked{color:var(--danger)}
 
 /* ── SHARE BUTTON on card ── */
-.pc-share{position:absolute;bottom:9px;right:9px;width:28px;height:28px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.1);color:var(--brand);font-size:13px;transition:var(--t);z-index:2}
+.pc-share{position:absolute;bottom:9px;right:9px;width:28px;height:28px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.1);color:var(--brand);font-size:13px;transition:var(--t);z-index:2}
 .pc-share:hover{background:var(--brand);color:#fff;transform:scale(1.1)}
 
 /* ── SHARE MODAL ── */
@@ -451,7 +465,7 @@ main{max-width:1280px;margin:0 auto;padding:0 20px 96px}
 .empty p{font-size:15px}
 
 /* ── PREMIUM BADGES ── */
-.plan-free{background:#f1f0ed;color:#6b6960}
+.plan-free{background:var(--surface2);color:var(--text-muted)}
 .plan-silver{background:linear-gradient(135deg,#c0c0c0,#e8e8e8);color:#555}
 .plan-gold{background:linear-gradient(135deg,#d4a017,#f5c842);color:#6b3a00}
 .plan-diamond{background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff}
@@ -521,7 +535,7 @@ main{max-width:1280px;margin:0 auto;padding:0 20px 96px}
 .restricted-tag{background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:50px;font-size:10px;font-weight:700}
 .admin-form-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px}
 .admin-login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#1a1917}
-.admin-login-box{background:#fff;border-radius:var(--rl);padding:36px;width:100%;max-width:380px;text-align:center}
+.admin-login-box{background:var(--surface);border-radius:var(--rl);padding:36px;width:100%;max-width:380px;text-align:center}
 .admin-login-box h2{font-size:22px;margin-bottom:6px}
 .admin-login-box p{color:var(--text-muted);font-size:13px;margin-bottom:24px}
 
