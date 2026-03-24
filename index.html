@@ -3699,7 +3699,13 @@ async function doLogin(){
     toast('Welcome back, ' + user.name + '! 👋', 'ok');
 
   } catch(e) {
-    errEl.textContent = 'Connection error. Check your internet and try again.';
+    if (!navigator.onLine) {
+      errEl.textContent = 'You are currently offline. Please check your internet connection.';
+    } else if (e.message && e.message.includes('permission_denied')) {
+      errEl.textContent = 'Server access denied. Please contact admin.';
+    } else {
+      errEl.textContent = 'Connection error: ' + (e.message || 'Check your internet and try again.');
+    }
     errEl.classList.remove('hidden');
     console.error('doLogin error:', e);
   }
@@ -3797,8 +3803,15 @@ async function doSignup(){
     toast('Account created! Welcome 🎉', 'ok');
 
   } catch(e) {
-    document.getElementById('signupEmailErr').textContent = 'Connection error. Check your internet and try again.';
-    document.getElementById('signupEmailErr').classList.remove('hidden');
+    const signupErr = document.getElementById('signupEmailErr');
+    if (!navigator.onLine) {
+      signupErr.textContent = 'You are offline. Check your internet connection.';
+    } else if (e.message && e.message.includes('permission_denied')) {
+      signupErr.textContent = 'Signup denied. Please contact admin.';
+    } else {
+      signupErr.textContent = 'Connection error: ' + (e.message || 'Check internet and try again.');
+    }
+    signupErr.classList.remove('hidden');
     console.error('doSignup error:', e);
   }
   _authLoading(false, 'signupBtn');
