@@ -3705,13 +3705,6 @@ async function doLogin(){
   }
   _authLoading(false, 'loginBtn');
 }
-  } catch(e) {
-    errEl.textContent = 'Connection error. Check your internet and try again.';
-    errEl.classList.remove('hidden');
-    console.error('doLogin error:', e);
-  }
-  _authLoading(false, 'loginBtn');
-}
 
 async function doSignup(){
   const first = document.getElementById('signupFirst').value.trim() || 'User';
@@ -3872,12 +3865,16 @@ async function changePassword() {
 /* ═══════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════ */
-history.replaceState({page: 'home'}, null, '#home');
-populateSelects();
-renderBillboard();
-renderStatesGrid();
-renderProducts();
-loadSession();
+try {
+  history.replaceState({page: 'home'}, null, '#home');
+  populateSelects();
+  renderBillboard();
+  renderStatesGrid();
+  renderProducts();
+  loadSession();
+} catch(e) {
+  console.error('INIT error:', e);
+}
 
 /* ── SPLASH SCREEN ── */
 (function() {
@@ -3916,6 +3913,16 @@ loadSession();
   }
   // Start after short delay so logo animation begins first
   setTimeout(step, 400);
+  
+  // Safety timeout: force hide splash after 5 seconds
+  setTimeout(function() {
+    if (splash && splash.style.display !== 'none') {
+      splash.classList.add('exit');
+      setTimeout(function() {
+        if (splash) splash.style.display = 'none';
+      }, 850);
+    }
+  }, 5000);
 })();
 
 </script>
