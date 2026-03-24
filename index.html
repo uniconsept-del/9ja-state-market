@@ -3959,12 +3959,6 @@ async function doLogin(){
 
       const acct = snap.val();
 
-      if (acct.deleted) {
-        errEl.textContent = '❌ This account has been permanently deleted. Contact admin for help.';
-        errEl.classList.remove('hidden');
-        _authLoading(false, 'loginBtn');
-        return;
-      }
       if (acct.pass !== pass) {
         errEl.textContent = 'Incorrect password. Try again.';
         errEl.classList.remove('hidden');
@@ -4045,14 +4039,12 @@ async function doSignup(){
 
       if (snap.exists()) {
         const existing = snap.val();
-        if (existing.deleted) {
-          document.getElementById('signupEmailErr').textContent = '❌ This email is permanently blocked by admin.';
-        } else {
+        if (!existing.deleted) {
           document.getElementById('signupEmailErr').textContent = 'An account with this email already exists. Please sign in.';
+          document.getElementById('signupEmailErr').classList.remove('hidden');
+          _authLoading(false, 'signupBtn');
+          return;
         }
-        document.getElementById('signupEmailErr').classList.remove('hidden');
-        _authLoading(false, 'signupBtn');
-        return;
       }
 
       // Create new account
@@ -4076,6 +4068,12 @@ async function doSignup(){
 
       user = newUser;
       sellerListings = [];
+      
+      // Clear from deleted blacklist if present
+      var deleted = getAdminData('deletedAccounts') || [];
+      var di = deleted.findIndex(function(d){ return d.email.toLowerCase() === email; });
+      if(di > -1){ deleted.splice(di, 1); setAdminData('deletedAccounts', deleted); }
+
       // Also keep local copy as fallback
       var accounts = getAdminData('accounts') || {};
       accounts[email] = { pass, profile: newUser };
@@ -4098,6 +4096,12 @@ async function doSignup(){
         uid:genUID(), avatarSrc:null, plan:'free', restricted:false
       };
       sellerListings = [];
+      
+      // Clear from deleted blacklist if present
+      var deleted = getAdminData('deletedAccounts') || [];
+      var di = deleted.findIndex(function(d){ return d.email.toLowerCase() === email; });
+      if(di > -1){ deleted.splice(di, 1); setAdminData('deletedAccounts', deleted); }
+
       accounts[email] = { pass, profile: user };
       setAdminData('accounts', accounts);
     }
