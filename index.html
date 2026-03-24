@@ -1010,7 +1010,11 @@ document.addEventListener('fb-ready', () => {
           <span id="pPlanBadge" class="plan-badge plan-free" style="padding:5px 14px;font-size:12px">FREE</span>
           <div id="pPlanExpiry" style="font-size:10px;color:var(--text-light);margin-top:4px"></div>
         </div>
-        <div class="p-stats"><div class="p-stat"><strong id="pAdCount">0</strong><span>Adverts</span></div><div class="p-stat"><strong id="pMsgCount">0</strong><span>Messages</span></div></div>
+        <div class="p-stats">
+          <div class="p-stat"><strong id="pAdCount">0</strong><span>Live Adverts</span></div>
+          <div class="p-stat"><strong id="pPendingCount">0</strong><span>Pending</span></div>
+          <div class="p-stat"><strong id="pMsgCount">0</strong><span>Messages</span></div>
+        </div>
         <div class="pnav">
           <div class="pni active" id="pni-edit" onclick="showProfileSection('edit',this)">✏️ Edit Profile</div>
           <div class="pni" id="pni-settings" onclick="showProfileSection('settings',this)">⚙️ Settings</div>
@@ -2820,7 +2824,7 @@ function escH(str) {
 
 function renderAdminAdverts() {
   const tbody = document.getElementById('adminAdvertsTable');
-  const allAds = [...PRODUCTS_DB, ...pendingListings];
+  const allAds = [...PRODUCTS_DB];
   if (!allAds.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px">No adverts posted yet.</td></tr>'; return; }
   tbody.innerHTML = allAds.map(p => `
     <tr>
@@ -2829,7 +2833,7 @@ function renderAdminAdverts() {
       <td>${p.category}</td>
       <td>${p.state}</td>
       <td>₦${p.price.toLocaleString()}</td>
-      <td>${p._pending?'<span class="s-pending sbadge">⏳ Pending</span>':p._disabled?'<span class="restricted-tag">Disabled</span>':'<span class="s-active sbadge">✓ Active</span>'}</td>
+      <td>${p._pending?'<span class="s-pending sbadge" style="background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:50px;font-size:11px;font-weight:700">⏳ Pending</span>':p._disabled?'<span class="restricted-tag">Disabled</span>':'<span class="s-active sbadge" style="background:#d1fae5;color:#059669;padding:2px 8px;border-radius:50px;font-size:11px;font-weight:700">✓ Live</span>'}</td>
       <td><button class="a-action ${p._disabled?'a-btn-green':'a-btn-red'}" onclick="adminToggleAd(${p.id})">${p._disabled?'Enable':'Disable'}</button></td>
     </tr>`).join('');
 }
@@ -3453,21 +3457,14 @@ async function submitListing(){
     if (_fbReady()) {
       const { db, ref, set } = window._fb;
       await set(ref(db, 'products/' + id), np);
-      
-      // Wait for review logic:
-      setTimeout(async () => {
-        await window._fb.update(ref(db, 'products/' + id), { _pending: false });
-        addNotif({icon:'🎉',text:`Your advert "${np.name}" is now live!`,time:nowFull(),unread:true});
-      }, 10*60*1000);
-
     } else {
       // Local fallback if Firebase not ready
       PRODUCTS_DB.push(np);
-      setTimeout(() => {
-        np._pending = false;
-        renderProducts();
-      }, 10*60*1000);
     }
+
+    // Add to local seller listings immediately so it shows in profile
+    sellerListings.push(np);
+    syncUserToAdmin();
 
     resetListingForm();
     addNotif({icon:'⏳',text:`Advert "${np.name}" submitted. Goes live in 10 minutes.`,time:nowFull(),unread:true});
@@ -3491,6 +3488,38 @@ async function submitListing(){
     btn.disabled = false;
   }
 }
+
+/* ═══════════════════════════════════════════
+   PENDING ADVERT REVIEW TIMER
+═══════════════════════════════════════════ */
+function checkPendingAdverts() {
+  if (!_fbReady()) return;
+  const now = Date.now();
+  // 10 minutes in milliseconds
+  const tenMinsAgo = now - (10 * 60 * 1000);
+  
+  PRODUCTS_DB.forEach(p => {
+    // If advert is pending and was posted more than 10 mins ago
+    if (p._pending && p.id < tenMinsAgo) {
+      const { db, ref, update } = window._fb;
+      update(ref(db, 'products/' + p.id), { _pending: false }).catch(e => console.error('Error approving advert:', e));
+      
+      // Also update local sellerListings if it belongs to current user
+      if (user && p.sellerUID === user.uid) {
+        const localAd = sellerListings.find(l => l.id === p.id);
+        if (localAd && localAd._pending) {
+          localAd._pending = false;
+          saveSession();
+          addNotif({icon:'🎉',text:`Your advert "${p.name}" is now live!`,time:nowFull(),unread:true});
+          if (currentPage === 'profile') renderProfile();
+        }
+      }
+    }
+  });
+}
+// Run check every 1 minute
+setInterval(checkPendingAdverts, 60 * 1000);
+
 let listingImgData = ''; // stores base64 of uploaded listing image
 
 function handleListingImg(input) {
@@ -3620,8 +3649,13 @@ function renderProfile(){
   const pav=document.getElementById('pav');
   if(user.avatarSrc){pav.innerHTML=`<img src="${user.avatarSrc}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"><input type="file" id="avInput" accept="image/*" style="display:none" onchange="handleAvatar(this)">`;}
   else{pav.innerHTML=user.initials+'<input type="file" id="avInput" accept="image/*" style="display:none" onchange="handleAvatar(this)">';}
-  document.getElementById('pAdCount').textContent=sellerListings.filter(l=>!l._pending).length;
+  
+  const liveAds = sellerListings.filter(l => !l._pending).length;
+  const pendingAds = sellerListings.filter(l => l._pending).length;
+  document.getElementById('pAdCount').textContent = liveAds;
+  document.getElementById('pPendingCount').textContent = pendingAds;
   document.getElementById('pMsgCount').textContent=Object.keys(conversations).length;
+  
   renderPlanBadgeUI();
   showProfileSection('edit',document.getElementById('pni-edit'));
 }
