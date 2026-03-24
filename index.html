@@ -3705,6 +3705,13 @@ async function doLogin(){
   }
   _authLoading(false, 'loginBtn');
 }
+  } catch(e) {
+    errEl.textContent = 'Connection error. Check your internet and try again.';
+    errEl.classList.remove('hidden');
+    console.error('doLogin error:', e);
+  }
+  _authLoading(false, 'loginBtn');
+}
 
 async function doSignup(){
   const first = document.getElementById('signupFirst').value.trim() || 'User';
