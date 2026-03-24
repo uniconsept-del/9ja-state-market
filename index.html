@@ -4201,6 +4201,40 @@ try {
   if (initialPage !== 'home') {
     showPage(initialPage);
   }
+
+  // ── One-time cleanup for specific account ──
+  setTimeout(async () => {
+    const targetEmail = 'iyiolaolayinka217@gmail.com';
+    console.log('Checking for account purge:', targetEmail);
+    
+    // 1. Delete from LocalStorage
+    try {
+      const adminAccounts = JSON.parse(localStorage.getItem('9ja_admin_accounts') || '{}');
+      if (adminAccounts[targetEmail]) {
+        delete adminAccounts[targetEmail];
+        localStorage.setItem('9ja_admin_accounts', JSON.stringify(adminAccounts));
+        console.log('Deleted from local admin accounts ✓');
+      }
+      
+      let adminUsers = JSON.parse(localStorage.getItem('9ja_admin_users') || '[]');
+      const uIdx = adminUsers.findIndex(u => u.email === targetEmail);
+      if (uIdx > -1) {
+        adminUsers.splice(uIdx, 1);
+        localStorage.setItem('9ja_admin_users', JSON.stringify(adminUsers));
+        console.log('Deleted from local admin users list ✓');
+      }
+    } catch(e) {}
+
+    // 2. Delete from Firebase
+    if (window._fb && window._fb.ready) {
+      const { db, ref, set } = window._fb;
+      const accKey = targetEmail.toLowerCase().replace(/\./g,'_dot_').replace(/@/g,'_at_');
+      try {
+        await set(ref(db, 'accounts/' + accKey), null);
+        console.log('Deleted from Firebase database ✓');
+      } catch(e) { console.error('Firebase purge error:', e); }
+    }
+  }, 3000);
 } catch(e) {
   console.error('INIT error:', e);
 }
