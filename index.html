@@ -1527,8 +1527,9 @@ document.getElementById('installBtn').addEventListener('click', async () => {
 });
 
 /* ═══════════════════════════════════════════
-   PULL-TO-REFRESH
+   PULL-TO-REFRESH (DISABLED BY USER REQUEST)
 ═══════════════════════════════════════════ */
+/* 
 let ptrY = 0, ptrPulling = false;
 document.addEventListener('touchstart', e => { ptrY = e.touches[0].clientY; }, {passive:true});
 document.addEventListener('touchmove', e => {
@@ -1549,6 +1550,7 @@ document.addEventListener('touchend', () => {
     toast('Refreshed ✓', 'ok');
   }, 800);
 });
+*/
 
 /* ═══════════════════════════════════════════
    SESSION PERSISTENCE (survives refresh)
@@ -3837,19 +3839,67 @@ function confirmLogout(){openConf('Sign Out','Are you sure you want to sign out?
 function confirmDeleteAccount(){
   openConf('Delete Account','This will permanently delete your account and all your data. Cannot be undone.',async function(){
     if(user){
+      const email = user.email.toLowerCase();
+      const uid = user.uid;
+      
       if (_fbReady()) {
-        const { db, ref, update } = window._fb;
-        // Mark deleted in Firebase — blocks re-registration
-        await update(ref(db, 'accounts/' + _fbAccKey(user.email)), { deleted: true, deletedAt: Date.now() });
+        const { db, ref, update, set, get } = window._fb;
+        const accKey = _fbAccKey(email);
+        
+        // 1. Mark as deleted to block re-registration with same email
+        await update(ref(db, 'accounts/' + accKey), { 
+          deleted: true, 
+          deletedAt: Date.now(),
+          profile: null, // Clear profile data
+          pass: 'DELETED_' + Date.now() // Scramble password
+        });
+
+        // 2. Delete user's products from Firebase
+        const productsRef = ref(db, 'products');
+        const pSnap = await get(productsRef);
+        if (pSnap.exists()) {
+          const allProducts = pSnap.val();
+          const updates = {};
+          Object.keys(allProducts).forEach(id => {
+            if (allProducts[id].sellerUID === uid) {
+              updates['products/' + id] = null;
+            }
+          });
+          if (Object.keys(updates).length > 0) {
+            await update(ref(db), updates);
+          }
+        }
+
+        // 3. Optional: Delete user's conversations? Usually better to keep for the other person
+        // but we can mark the user as "Deleted User" in those convs
+        const convsRef = ref(db, 'conversations');
+        const cSnap = await get(convsRef);
+        if (cSnap.exists()) {
+          const allConvs = cSnap.val();
+          const cUpdates = {};
+          Object.keys(allConvs).forEach(cid => {
+            const c = allConvs[cid];
+            if (c.buyerUID === uid) {
+              cUpdates[`conversations/${cid}/buyerName`] = 'Deleted User';
+            }
+            if (c.sellerUID === uid) {
+              cUpdates[`conversations/${cid}/sellerName`] = 'Deleted User';
+            }
+          });
+          if (Object.keys(cUpdates).length > 0) {
+            await update(ref(db), cUpdates);
+          }
+        }
       }
+
       // Also mark in local store as fallback
       var deleted = getAdminData('deletedAccounts') || [];
-      if(!deleted.find(function(d){ return d.email===user.email; })){
-        deleted.push({email:user.email, uid:user.uid, name:user.name, deletedAt:nowFull()});
+      if(!deleted.find(function(d){ return d.email===email; })){
+        deleted.push({email:email, uid:uid, name:user.name, deletedAt:nowFull()});
         setAdminData('deletedAccounts', deleted);
       }
       var accounts = getAdminData('accounts') || {};
-      delete accounts[user.email.toLowerCase()];
+      delete accounts[email];
       setAdminData('accounts', accounts);
     }
     doLogout();
