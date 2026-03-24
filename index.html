@@ -736,19 +736,25 @@ const firebaseConfig = {
   appId:             "1:912696582912:web:a882cc8fe4415e5c4589e5"
 };
 
-const _fbApp = initializeApp(firebaseConfig);
-const _db    = getDatabase(_fbApp);
+try {
+  const _fbApp = initializeApp(firebaseConfig);
+  const _db    = getDatabase(_fbApp);
 
-// ── Expose Firebase helpers to the rest of the app ──
-window._fb = {
-  db: _db,
-  ref, push, set, onValue, onChildAdded, onChildChanged,
-  serverTimestamp, query, orderByChild, limitToLast, update, get,
-  ready: true
-};
+  // ── Expose Firebase helpers to the rest of the app ──
+  window._fb = {
+    db: _db,
+    ref, push, set, onValue, onChildAdded, onChildChanged,
+    serverTimestamp, query, orderByChild, limitToLast, update, get,
+    ready: true
+  };
 
-// Signal that Firebase is ready
-document.dispatchEvent(new Event('fb-ready'));
+  // Signal that Firebase is ready
+  document.dispatchEvent(new Event('fb-ready'));
+  console.log('Firebase initialized successfully ✓');
+} catch (error) {
+  console.error('Firebase initialization error:', error);
+  window._fb = { ready: false };
+}
 
 // Auto-refresh messages page if user is already on it when Firebase connects
 document.addEventListener('fb-ready', () => {
@@ -3699,15 +3705,15 @@ async function doLogin(){
     toast('Welcome back, ' + user.name + '! 👋', 'ok');
 
   } catch(e) {
+    console.error('doLogin full error:', e);
     if (!navigator.onLine) {
       errEl.textContent = 'You are currently offline. Please check your internet connection.';
     } else if (e.message && e.message.includes('permission_denied')) {
-      errEl.textContent = 'Server access denied. Please contact admin.';
+      errEl.textContent = 'Server access denied. Firebase security rules might be blocking access.';
     } else {
-      errEl.textContent = 'Connection error: ' + (e.message || 'Check your internet and try again.');
+      errEl.textContent = 'Login Error: ' + (e.message || 'Please check your internet or Firebase configuration.');
     }
     errEl.classList.remove('hidden');
-    console.error('doLogin error:', e);
   }
   _authLoading(false, 'loginBtn');
 }
