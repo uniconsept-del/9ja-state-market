@@ -44,7 +44,6 @@ button{cursor:pointer;border:none;background:none;font-family:inherit}
 input,select,textarea{font-family:inherit}
 a{text-decoration:none;color:inherit}
 img{max-width:100%;display:block}
-.page{display:none}.page.active{display:block}
 .hidden{display:none!important}
 
 /* ── INSTALL BANNER ── */
@@ -89,9 +88,14 @@ nav{background:var(--surface);border-bottom:1px solid var(--border);position:sti
 .bn-badge{position:absolute;top:3px;right:calc(50% - 18px);background:var(--danger);color:#fff;font-size:9px;font-weight:700;min-width:15px;height:15px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px}
 .bn-badge.hidden{display:none}
 
+/* ── PAGE BASE ── */
+.page{display:none;height:calc(100vh - 64px);background:var(--bg);overflow:hidden}
+.page.active{display:block}
+#page-messages.page.active{display:flex;flex-direction:column}
 /* ── MAIN ── */
-main{max-width:1280px;margin:0 auto;padding:0 20px 96px}
+main{max-width:1280px;margin:0 auto;padding:0 20px 96px;height:100%;overflow-y:auto}
 @media(min-width:768px){main{padding-bottom:40px}}
+#page-messages main{padding:0;overflow:hidden;display:flex;flex-direction:column}
 .mob-search{display:block;margin-bottom:18px;position:relative}
 @media(min-width:768px){.mob-search{display:none}}
 .mob-search input{width:100%;padding:11px 14px 11px 42px;border:1.5px solid var(--border);border-radius:50px;font-size:15px;background:var(--surface);outline:none;transition:var(--t)}
@@ -262,7 +266,7 @@ main{max-width:1280px;margin:0 auto;padding:0 20px 96px}
 .cart-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--text-light)}
 
 /* ── MESSAGES PAGE ── */
-.msgs-layout{display:grid;gap:0;height:calc(100vh - 140px)}
+.msgs-layout{display:grid;gap:0;height:100%;min-height:0}
 @media(min-width:768px){.msgs-layout{grid-template-columns:320px 1fr;border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;background:var(--surface)}}
 .convos-list{background:var(--surface);overflow-y:auto}
 @media(min-width:768px){.convos-list{border-right:1px solid var(--border)}}
@@ -282,9 +286,9 @@ main{max-width:1280px;margin:0 auto;padding:0 20px 96px}
 .msgs-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:var(--text-light);text-align:center}
 
 /* ── CHAT AREA ── */
-.chat-area{display:flex;flex-direction:column;background:var(--bg)}
-@media(max-width:767px){.chat-area.mobile-open{position:fixed;inset:0;z-index:300;background:var(--bg)}}
-.chat-area-hdr{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface)}
+.chat-area{display:flex;flex-direction:column;background:var(--bg);height:100%;min-height:0;flex:1;overflow:hidden}
+@media(max-width:767px){.chat-area.mobile-open{position:fixed;inset:0;z-index:300;background:var(--bg);height:100vh}}
+.chat-area-hdr{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
 .chat-back{color:var(--text-muted);margin-right:4px;display:none}
 @media(max-width:767px){.chat-back{display:flex}}
 .chat-area-av{width:38px;height:38px;border-radius:50%;background:var(--brand-light);color:var(--brand);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;overflow:hidden;flex-shrink:0}
@@ -304,12 +308,12 @@ main{max-width:1280px;margin:0 auto;padding:0 20px 96px}
 .chat-ad-info{flex:1;min-width:0}
 .chat-ad-name{font-size:13px;font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat-ad-price{font-size:12px;font-weight:700;color:var(--brand)}
-.msg{max-width:76%;padding:9px 13px;border-radius:16px;font-size:14px;line-height:1.5;word-break:break-word}
+.msg{max-width:85%;padding:8px 12px;border-radius:14px;font-size:14px;line-height:1.4;word-break:break-word;margin-bottom:2px}
 .msg.them{background:var(--surface);color:var(--text);border-bottom-left-radius:4px;align-self:flex-start;box-shadow:var(--shadow)}
 .msg.me{background:var(--brand);color:#fff;border-bottom-right-radius:4px;align-self:flex-end}
 .msg.sys{background:#fff8e1;color:#92400e;border-radius:10px;align-self:center;font-size:11px;max-width:88%;text-align:center;border:1px solid #fde68a;padding:7px 12px}
-.msg-time{font-size:10px;opacity:.55;margin-top:3px}
-.chat-input-row{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);background:var(--surface)}
+.msg-time{font-size:10px;opacity:.65;margin-top:2px;display:flex;align-items:center;justify-content:flex-end;gap:4px}
+.chat-input-row{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0}
 .chat-inp{flex:1;padding:10px 15px;border:1.5px solid var(--border);border-radius:50px;font-size:14px;outline:none;background:var(--surface2);transition:var(--t)}
 .chat-inp:focus{border-color:var(--brand);background:#fff}
 .chat-send{width:40px;height:40px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;transition:var(--t);flex-shrink:0}
@@ -1002,13 +1006,13 @@ document.addEventListener('fb-ready', () => {
 </div>
 
 <!-- MESSAGES -->
-<div class="page" id="page-messages">
-  <main style="padding-left:0;padding-right:0;padding-bottom:0;max-width:100%;">
-    <div style="max-width:1280px;margin:0 auto;padding:0 20px 16px;display:flex;align-items:center;gap:12px;padding-top:16px;">
+<div class="page" id="page-messages" style="height:calc(100vh - 64px);overflow:hidden;display:none;flex-direction:column">
+  <main style="padding:0;max-width:100%;flex:1;display:flex;flex-direction:column;overflow:hidden">
+    <div style="max-width:1280px;width:100%;margin:0 auto;padding:16px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0">
       <button class="back-btn" onclick="goBack()" style="margin:0">← Back</button>
       <h2 style="font-size:20px;font-weight:700;flex:1">Messages</h2>
     </div>
-    <div class="msgs-layout" id="msgsLayout">
+    <div class="msgs-layout" id="msgsLayout" style="flex:1;min-height:0">
       <!-- LEFT: conversations list -->
       <div class="convos-list" id="convosList">
         <div class="convos-hdr">
@@ -1024,7 +1028,7 @@ document.addEventListener('fb-ready', () => {
           <p style="font-size:15px;font-weight:600;margin-bottom:4px">Select a conversation</p>
           <p style="font-size:13px">Choose a chat from the left to start messaging</p>
         </div>
-        <div id="chatAreaContent" style="display:none;flex:1;display:none;flex-direction:column;height:100%"></div>
+        <div id="chatAreaContent" style="display:none;flex:1;flex-direction:column;min-height:0"></div>
       </div>
     </div>
   </main>
@@ -2211,7 +2215,8 @@ function _subscribeMessages(convId) {
       return;
     }
 
-    const wasAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 60;
+    const wasAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
+    const isFirstLoad = container.innerHTML.includes('Loading messages');
 
     const conv = conversations[convId];
     const adCard = getChatAdCardHTML(conv);
@@ -2238,7 +2243,10 @@ function _subscribeMessages(convId) {
       return (m.deletedEveryone || (m.deletedFor && m.deletedFor[user.uid])) ? '' : msgHtml;
     }).join('');
 
-    if (wasAtBottom) container.scrollTop = container.scrollHeight;
+    // Scroll to bottom on first load OR if we were already at the bottom
+    if (isFirstLoad || wasAtBottom) {
+      container.scrollTop = container.scrollHeight;
+    }
 
     // Mark messages from others as DELIVERED and READ
     if (_fbReady()) {
